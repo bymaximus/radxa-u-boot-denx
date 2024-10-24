@@ -8,13 +8,6 @@ config CREATE_ARCH_SYMLINK
 config HAVE_ARCH_IOREMAP
 	bool
 
-config SUPPORT_BIG_ENDIAN
-	bool
-
-config SUPPORT_LITTLE_ENDIAN
-	bool
-	default y if !SUPPORT_BIG_ENDIAN
-
 config SYS_CACHE_SHIFT_4
 	bool
 
