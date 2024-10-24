@@ -130,7 +130,7 @@ static efi_status_t try_load_from_file_path(efi_handle_t *fs_handles,
 		if (!dp)
 			continue;
 
-		dp = efi_dp_concat(dp, fp, false);
+		dp = efi_dp_concat(dp, fp, 0);
 		if (!dp)
 			continue;
 
@@ -380,14 +380,15 @@ err:
 }
 
 /**
- * efi_bootmgr_release_uridp_resource() - cleanup uri device path resource
+ * efi_bootmgr_release_uridp() - cleanup uri device path resource
  *
  * @ctx:	event context
  * Return:	status code
  */
-efi_status_t efi_bootmgr_release_uridp_resource(struct uridp_context *ctx)
+efi_status_t efi_bootmgr_release_uridp(struct uridp_context *ctx)
 {
 	efi_status_t ret = EFI_SUCCESS;
+	efi_status_t ret2 = EFI_SUCCESS;
 
 	if (!ctx)
 		return ret;
@@ -407,32 +408,33 @@ efi_status_t efi_bootmgr_release_uridp_resource(struct uridp_context *ctx)
 
 	/* cleanup for PE-COFF image */
 	if (ctx->mem_handle) {
-		ret = efi_uninstall_multiple_protocol_interfaces(
-			ctx->mem_handle, &efi_guid_device_path, ctx->loaded_dp,
-			NULL);
-		if (ret != EFI_SUCCESS)
+		ret2 = efi_uninstall_multiple_protocol_interfaces(ctx->mem_handle,
+								  &efi_guid_device_path,
+								  ctx->loaded_dp,
+								  NULL);
+		if (ret2 != EFI_SUCCESS)
 			log_err("Uninstall device_path protocol failed\n");
 	}
 
 	efi_free_pool(ctx->loaded_dp);
 	free(ctx);
 
-	return ret;
+	return ret == EFI_SUCCESS ? ret2 : ret;
 }
 
 /**
- * efi_bootmgr_image_return_notify() - return to efibootmgr callback
+ * efi_bootmgr_http_return() - return to efibootmgr callback
  *
  * @event:	the event for which this notification function is registered
  * @context:	event context
  */
-static void EFIAPI efi_bootmgr_image_return_notify(struct efi_event *event,
-						   void *context)
+static void EFIAPI efi_bootmgr_http_return(struct efi_event *event,
+					   void *context)
 {
 	efi_status_t ret;
 
 	EFI_ENTRY("%p, %p", event, context);
-	ret = efi_bootmgr_release_uridp_resource(context);
+	ret = efi_bootmgr_release_uridp(context);
 	EFI_EXIT(ret);
 }
 
@@ -533,7 +535,7 @@ static efi_status_t try_load_from_uri_path(struct efi_device_path_uri *uridp,
 
 	/* create event for cleanup when the image returns or error occurs */
 	ret = efi_create_event(EVT_NOTIFY_SIGNAL, TPL_CALLBACK,
-			       efi_bootmgr_image_return_notify, ctx,
+			       efi_bootmgr_http_return, ctx,
 			       &efi_guid_event_group_return_to_efibootmgr,
 			       &event);
 	if (ret != EFI_SUCCESS) {
@@ -544,7 +546,7 @@ static efi_status_t try_load_from_uri_path(struct efi_device_path_uri *uridp,
 	return ret;
 
 err:
-	efi_bootmgr_release_uridp_resource(ctx);
+	efi_bootmgr_release_uridp(ctx);
 
 	return ret;
 }
@@ -1186,6 +1188,59 @@ out:
 }
 
 /**
+ * load_fdt_from_load_option - load device-tree from load option
+ *
+ * @fdt:	pointer to loaded device-tree or NULL
+ * Return:	status code
+ */
+static efi_status_t load_fdt_from_load_option(void **fdt)
+{
+	struct efi_device_path *dp = NULL;
+	struct efi_file_handle *f = NULL;
+	efi_uintn_t filesize;
+	efi_status_t ret;
+
+	*fdt = NULL;
+
+	dp = efi_get_dp_from_boot(&efi_guid_fdt);
+	if (!dp)
+		return EFI_SUCCESS;
+
+	/* Open file */
+	f = efi_file_from_path(dp);
+	if (!f) {
+		log_err("Can't find %pD specified in Boot####\n", dp);
+		ret = EFI_NOT_FOUND;
+		goto out;
+	}
+
+	/* Get file size */
+	ret = efi_file_size(f, &filesize);
+	if (ret != EFI_SUCCESS)
+		goto out;
+
+	*fdt = calloc(1, filesize);
+	if (!*fdt) {
+		log_err("Out of memory\n");
+		ret = EFI_OUT_OF_RESOURCES;
+		goto out;
+	}
+	ret = EFI_CALL(f->read(f, &filesize, *fdt));
+	if (ret != EFI_SUCCESS) {
+		log_err("Can't read fdt\n");
+		free(*fdt);
+		*fdt = NULL;
+	}
+
+out:
+	efi_free_pool(dp);
+	if (f)
+		EFI_CALL(f->close(f));
+
+	return ret;
+}
+
+/**
  * efi_bootmgr_run() - execute EFI boot manager
  * @fdt:	Flat device tree
  *
@@ -1200,6 +1255,8 @@ efi_status_t efi_bootmgr_run(void *fdt)
 	efi_handle_t handle;
 	void *load_options;
 	efi_status_t ret;
+	void *fdt_lo, *fdt_distro = NULL;
+	efi_uintn_t fdt_size;
 
 	/* Initialize EFI drivers */
 	ret = efi_init_obj_list();
@@ -1215,7 +1272,31 @@ efi_status_t efi_bootmgr_run(void *fdt)
 		return ret;
 	}
 
+	if (!IS_ENABLED(CONFIG_GENERATE_ACPI_TABLE)) {
+		ret = load_fdt_from_load_option(&fdt_lo);
+		if (ret != EFI_SUCCESS)
+			return ret;
+		if (fdt_lo)
+			fdt = fdt_lo;
+		if (!fdt) {
+			efi_load_distro_fdt(handle, &fdt_distro, &fdt_size);
+			fdt = fdt_distro;
+		}
+	}
+
+	/*
+	 * Needed in ACPI case to create reservations based on
+	 * control device-tree.
+	 */
 	ret = efi_install_fdt(fdt);
+
+	if (!IS_ENABLED(CONFIG_GENERATE_ACPI_TABLE)) {
+		free(fdt_lo);
+		if (fdt_distro)
+			efi_free_pages((uintptr_t)fdt_distro,
+				       efi_size_in_pages(fdt_size));
+	}
+
 	if (ret != EFI_SUCCESS) {
 		if (EFI_CALL(efi_unload_image(handle)) == EFI_SUCCESS)
 			free(load_options);

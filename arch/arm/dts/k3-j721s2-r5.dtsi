@@ -20,9 +20,10 @@
 				<&k3_pds 202 TI_SCI_PD_EXCLUSIVE>,
 				<&k3_pds 4 TI_SCI_PD_EXCLUSIVE>;
 		resets = <&k3_reset 202 0>;
-		clocks = <&k3_clks 61 1>;
+		clocks = <&k3_clks 61 1>, <&k3_clks 202 0>;
+		clock-names = "gtc", "core";
 		assigned-clocks = <&k3_clks 61 1>, <&k3_clks 202 0>;
-		assigned-clock-parents = <&k3_clks 61 2>;
+		assigned-clock-parents = <&k3_clks 61 3>;
 		assigned-clock-rates = <200000000>, <2000000000>;
 		ti,sci = <&sms>;
 		ti,sci-proc-id = <32>;
@@ -78,4 +79,17 @@
 
 &mcu_udmap {
 	ti,sci = <&dm_tifs>;
+};
+
+&ospi0 {
+		reg = <0x0 0x47040000 0x0 0x100>,
+			  <0x0 0x50000000 0x0 0x8000000>;
+};
+
+&fss {
+	/* fss node has 64 bit address regions mapped to it and since the ospi
+	 * nodes is being override, override the fss node ranges as well
+	 */
+	ranges = <0x0 0x47000000 0x0 0x47000000 0x0 0x00068400>,
+			 <0x0 0x50000000 0x0 0x50000000 0x0 0x08000000>;
 };

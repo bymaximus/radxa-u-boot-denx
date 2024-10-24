@@ -37,6 +37,7 @@
 #include <power/regulator.h>
 #include <remoteproc.h>
 #include <reset.h>
+#include <spl.h>
 #include <syscon.h>
 #include <usb.h>
 #include <usb/dwc2_udc.h>
@@ -75,14 +76,25 @@
 
 static bool dh_stm32_mac_is_in_ks8851(void)
 {
-	ofnode node;
+	struct udevice *udev;
 	u32 reg, cider, ccr;
+	char path[256];
+	ofnode node;
+	int ret;
 
 	node = ofnode_path("ethernet1");
 	if (!ofnode_valid(node))
 		return false;
 
-	if (ofnode_device_is_compatible(node, "micrel,ks8851-mll"))
+	ret = ofnode_get_path(node, path, sizeof(path));
+	if (ret)
+		return false;
+
+	ret = uclass_get_device_by_of_path(UCLASS_ETH, path, &udev);
+	if (ret)
+		return false;
+
+	if (!ofnode_device_is_compatible(node, "micrel,ks8851-mll"))
 		return false;
 
 	/*
@@ -248,13 +260,13 @@ int board_stm32mp1_ddr_config_name_match(struct udevice *dev,
 
 void board_vddcore_init(u32 voltage_mv)
 {
-	if (IS_ENABLED(CONFIG_SPL_BUILD))
+	if (IS_ENABLED(CONFIG_XPL_BUILD))
 		opp_voltage_mv = voltage_mv;
 }
 
 int board_early_init_f(void)
 {
-	if (IS_ENABLED(CONFIG_SPL_BUILD))
+	if (IS_ENABLED(CONFIG_XPL_BUILD))
 		stpmic1_init(opp_voltage_mv);
 	board_get_coding_straps();
 
@@ -264,15 +276,26 @@ int board_early_init_f(void)
 #ifdef CONFIG_SPL_LOAD_FIT
 int board_fit_config_name_match(const char *name)
 {
+	char *cdevice, *ndevice;
 	const char *compat;
-	char test[128];
 
 	compat = ofnode_get_property(ofnode_root(), "compatible", NULL);
+	if (!compat)
+		return -EINVAL;
 
-	snprintf(test, sizeof(test), "%s_somrev%d_boardrev%d",
-		compat, somcode, brdcode);
+	cdevice = strchr(compat, ',');
+	if (!cdevice)
+		return -ENODEV;
 
-	if (!strcmp(name, test))
+	cdevice++;	/* Move past the comma right after vendor prefix. */
+
+	ndevice = strchr(name, '/');
+	if (!ndevice)
+		return -ENODEV;
+
+	ndevice++;	/* Move past the last slash in DT path */
+
+	if (!strcmp(cdevice, ndevice))
 		return 0;
 
 	return -EINVAL;
@@ -610,8 +633,6 @@ static void board_init_regulator_av96(void)
 static void board_init_regulator(void)
 {
 	board_init_regulator_av96();
-
-	regulators_enable_boot_on(_DEBUG);
 }
 #else
 static inline int board_get_regulator_buck3_nvm_uv_av96(int *uv)
@@ -672,11 +693,68 @@ void board_quiesce_devices(void)
 #endif
 }
 
+static void dh_stm32_ks8851_fixup(void *blob)
+{
+	struct gpio_desc ks8851intrn;
+	bool compatible = false;
+	int ks8851intrn_value;
+	const char *prop;
+	ofnode node;
+	int idx = 0;
+	int offset;
+	int ret;
+
+	/* Do nothing if not STM32MP15xx DHCOM SoM */
+	while ((prop = fdt_stringlist_get(blob, 0, "compatible", idx++, NULL))) {
+		if (!strstr(prop, "dhcom-som"))
+			continue;
+		compatible = true;
+		break;
+	}
+
+	if (!compatible)
+		return;
+
+	/*
+	 * Read state of INTRN pull up resistor, if this pull up is populated,
+	 * KS8851-16MLL is populated as well and should be enabled, otherwise
+	 * it should be disabled.
+	 */
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node))
+		return;
+
+	ret = gpio_request_by_name_nodev(node, "dh,mac-coding-gpios", 0,
+					 &ks8851intrn, GPIOD_IS_IN);
+	if (ret)
+		return;
+
+	ks8851intrn_value = dm_gpio_get_value(&ks8851intrn);
+
+	dm_gpio_free(NULL, &ks8851intrn);
+
+	/* Set the 'status' property into KS8851-16MLL DT node. */
+	offset = fdt_path_offset(blob, "ethernet1");
+	ret = fdt_node_check_compatible(blob, offset, "micrel,ks8851-mll");
+	if (ret)	/* Not compatible */
+		return;
+
+	/* Add a bit of extra space for new 'status' property */
+	ret = fdt_shrink_to_minimum(blob, 4096);
+	if (!ret)
+		return;
+
+	fdt_setprop_string(blob, offset, "status",
+			   ks8851intrn_value ? "okay" : "disabled");
+}
+
 #if defined(CONFIG_OF_BOARD_SETUP)
 int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	const char *buck3path = "/soc/i2c@5c002000/stpmic@33/regulators/buck3";
 	int buck3off, ret, uv;
+
+	dh_stm32_ks8851_fixup(blob);
 
 	ret = board_get_regulator_buck3_nvm_uv_av96(&uv);
 	if (ret)	/* Not Avenger96 board, do not patch Buck3 in DT. */
@@ -695,6 +773,13 @@ int ft_board_setup(void *blob, struct bd_info *bd)
 		return ret;
 
 	return 0;
+}
+#endif
+
+#if defined(CONFIG_XPL_BUILD)
+void spl_perform_fixups(struct spl_image_info *spl_image)
+{
+	dh_stm32_ks8851_fixup(spl_image_fdt_addr(spl_image));
 }
 #endif
 

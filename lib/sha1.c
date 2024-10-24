@@ -17,7 +17,7 @@
 #endif
 
 #ifndef USE_HOSTCC
-#include <cyclic.h>
+#include <u-boot/schedule.h>
 #endif /* USE_HOSTCC */
 #include <string.h>
 #include <u-boot/sha1.h>
@@ -302,19 +302,6 @@ void sha1_finish (sha1_context * ctx, unsigned char output[20])
 	PUT_UINT32_BE (ctx->state[2], output, 8);
 	PUT_UINT32_BE (ctx->state[3], output, 12);
 	PUT_UINT32_BE (ctx->state[4], output, 16);
-}
-
-/*
- * Output = SHA-1( input buffer )
- */
-void sha1_csum(const unsigned char *input, unsigned int ilen,
-	       unsigned char *output)
-{
-	sha1_context ctx;
-
-	sha1_starts (&ctx);
-	sha1_update (&ctx, input, ilen);
-	sha1_finish (&ctx, output);
 }
 
 /*

@@ -2,9 +2,9 @@
 # This Dockerfile is used to build an image containing basic stuff to be used
 # to build U-Boot and run our test suites.
 
-FROM ubuntu:jammy-20240227
-MAINTAINER Tom Rini <trini@konsulko.com>
-LABEL Description=" This image is for building U-Boot inside a container"
+FROM ubuntu:jammy-20240808
+LABEL org.opencontainers.image.authors="Tom Rini <trini@konsulko.com>"
+LABEL org.opencontainers.image.description=" This image is for building U-Boot inside a container"
 
 # Make sure apt is happy
 ENV DEBIAN_FRONTEND=noninteractive
@@ -244,11 +244,14 @@ RUN mkdir /tmp/trace && \
     rm -rf /tmp/trace
 
 # Build coreboot
-RUN wget -O - https://coreboot.org/releases/coreboot-4.22.01.tar.xz | tar -C /tmp -xJ && \
-    cd /tmp/coreboot-4.22.01 && \
+RUN wget -O - https://coreboot.org/releases/coreboot-24.08.tar.xz | tar -C /tmp -xJ && \
+    cd /tmp/coreboot-24.08 && \
     make crossgcc-i386 CPUS=$(nproc) && \
     make -C payloads/coreinfo olddefconfig && \
     make -C payloads/coreinfo && \
+    make olddefconfig && \
+    echo CONFIG_GENERIC_LINEAR_FRAMEBUFFER=y | tee -a .config && \
+    echo CONFIG_USE_OPTION_TABLE=y | tee -a .config && \
     make olddefconfig && \
     make -j $(nproc) && \
     sudo mkdir /opt/coreboot && \

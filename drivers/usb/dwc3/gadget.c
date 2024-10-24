@@ -248,7 +248,7 @@ void dwc3_gadget_giveback(struct dwc3_ep *dep, struct dwc3_request *req,
 
 	list_del(&req->list);
 	req->trb = NULL;
-	if (req->request.length)
+	if (req->request.dma && req->request.length)
 		dwc3_flush_cache((uintptr_t)req->request.dma, req->request.length);
 
 	if (req->request.status == -EINPROGRESS)
@@ -256,7 +256,7 @@ void dwc3_gadget_giveback(struct dwc3_ep *dep, struct dwc3_request *req,
 
 	if (dwc->ep0_bounced && dep->number == 0)
 		dwc->ep0_bounced = false;
-	else
+	else if (req->request.dma)
 		usb_gadget_unmap_request(&dwc->gadget, &req->request,
 				req->direction);
 
@@ -753,7 +753,6 @@ static void dwc3_prepare_one_trb(struct dwc3_ep *dep,
 	dev_vdbg(dep->dwc->dev, "%s: req %p dma %08llx length %d%s%s\n",
 		 dep->name, req, (unsigned long long)dma,
 		 length, last ? " last" : "", chain ? " chain" : "");
-
 
 	trb = &dep->trb_pool[dep->free_slot & DWC3_TRB_MASK];
 
@@ -1606,6 +1605,38 @@ static int dwc3_gadget_stop(struct usb_gadget *g)
 	return 0;
 }
 
+static struct usb_ep *dwc3_find_ep(struct usb_gadget *gadget, const char *name)
+{
+	struct usb_ep *ep;
+
+	list_for_each_entry(ep, &gadget->ep_list, ep_list)
+		if (!strcmp(ep->name, name))
+			return ep;
+
+	return NULL;
+}
+
+static struct
+usb_ep *dwc3_gadget_match_ep(struct usb_gadget *gadget,
+			     struct usb_endpoint_descriptor *desc,
+			     struct usb_ss_ep_comp_descriptor *comp_desc)
+{
+	/*
+	 * First try standard, common configuration: ep1in-bulk,
+	 * ep2out-bulk, ep3in-int to match other udc drivers to avoid
+	 * confusion in already deployed software (endpoint numbers
+	 * hardcoded in userspace software/drivers)
+	 */
+	if (usb_endpoint_is_bulk_in(desc))
+		return dwc3_find_ep(gadget, "ep1in");
+	if (usb_endpoint_is_bulk_out(desc))
+		return dwc3_find_ep(gadget, "ep2out");
+	if (usb_endpoint_is_int_in(desc))
+		return dwc3_find_ep(gadget, "ep3in");
+
+	return NULL;
+}
+
 static const struct usb_gadget_ops dwc3_gadget_ops = {
 	.get_frame		= dwc3_gadget_get_frame,
 	.wakeup			= dwc3_gadget_wakeup,
@@ -1613,6 +1644,7 @@ static const struct usb_gadget_ops dwc3_gadget_ops = {
 	.pullup			= dwc3_gadget_pullup,
 	.udc_start		= dwc3_gadget_start,
 	.udc_stop		= dwc3_gadget_stop,
+	.match_ep		= dwc3_gadget_match_ep,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -2502,6 +2534,8 @@ static irqreturn_t dwc3_process_event_buf(struct dwc3 *dwc, u32 buf)
 	while (left > 0) {
 		union dwc3_event event;
 
+		dwc3_invalidate_cache((uintptr_t)evt->buf, evt->length);
+
 		event.raw = *(u32 *) (evt->buf + evt->lpos);
 
 		dwc3_process_event_entry(dwc, &event);
@@ -2621,8 +2655,8 @@ int dwc3_gadget_init(struct dwc3 *dwc)
 		goto err1;
 	}
 
-	dwc->setup_buf = memalign(CONFIG_SYS_CACHELINE_SIZE,
-				  DWC3_EP0_BOUNCE_SIZE);
+	dwc->setup_buf = dma_alloc_coherent(DWC3_EP0_BOUNCE_SIZE,
+					(unsigned long *)&dwc->setup_buf_addr);
 	if (!dwc->setup_buf) {
 		ret = -ENOMEM;
 		goto err2;
@@ -2669,7 +2703,7 @@ err4:
 	dma_free_coherent(dwc->ep0_bounce);
 
 err3:
-	kfree(dwc->setup_buf);
+	dma_free_coherent(dwc->setup_buf);
 
 err2:
 	dma_free_coherent(dwc->ep0_trb);
@@ -2691,7 +2725,7 @@ void dwc3_gadget_exit(struct dwc3 *dwc)
 
 	dma_free_coherent(dwc->ep0_bounce);
 
-	kfree(dwc->setup_buf);
+	dma_free_coherent(dwc->setup_buf);
 
 	dma_free_coherent(dwc->ep0_trb);
 

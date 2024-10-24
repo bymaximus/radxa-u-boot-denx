@@ -24,7 +24,8 @@
 		power-domains = <&k3_pds 61 TI_SCI_PD_EXCLUSIVE>,
 				<&k3_pds 135 TI_SCI_PD_EXCLUSIVE>;
 		resets = <&k3_reset 135 0>;
-		clocks = <&k3_clks 61 0>;
+		clocks = <&k3_clks 61 0>, <&k3_clks 135 0>;
+		clock-names = "gtc", "core";
 		assigned-clocks = <&k3_clks 61 0>, <&k3_clks 135 0>;
 		assigned-clock-parents = <&k3_clks 61 2>;
 		assigned-clock-rates = <200000000>, <1250000000>;
@@ -79,6 +80,7 @@
 &binman {
 	tiboot3-am62x-gp-evm.bin {
 		filename = "tiboot3-am62x-gp-evm.bin";
+		symlink = "tiboot3.bin";
 		ti-secure-rom {
 			content = <&u_boot_spl_unsigned>, <&ti_fs_gp>,
 				<&combined_tifs_cfg_gp>, <&combined_dm_cfg_gp>;
@@ -112,5 +114,20 @@
 			type = "blob-ext";
 		};
 
+	};
+};
+
+#include "k3-binman-capsule-r5.dtsi"
+
+// Capsule update GUIDs in string form.  See beagleplay.h
+#define BEAGLEPLAY_TIBOOT3_IMAGE_GUID_STR "0e225a09-f720-4d57-9120-e28f737f5a5e"
+
+&capsule_tiboot3 {
+	efi-capsule {
+		image-guid = BEAGLEPLAY_TIBOOT3_IMAGE_GUID_STR;
+
+		blob {
+			filename = "tiboot3-am62x-gp-evm.bin";
+		};
 	};
 };

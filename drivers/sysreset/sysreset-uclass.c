@@ -102,7 +102,7 @@ void sysreset_walk_halt(enum sysreset_t type)
 		mdelay(100);
 
 	/* Still no reset? Give up */
-	if (spl_phase() <= PHASE_SPL)
+	if (xpl_phase() <= PHASE_SPL)
 		log_err("no sysreset\n");
 	else
 		log_err("System reset not supported on this platform\n");
@@ -116,7 +116,6 @@ void reset_cpu(void)
 {
 	sysreset_walk_halt(SYSRESET_WARM);
 }
-
 
 #if IS_ENABLED(CONFIG_SYSRESET_CMD_RESET)
 int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])

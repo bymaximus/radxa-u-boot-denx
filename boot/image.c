@@ -130,7 +130,10 @@ static const table_entry_t uimage_os[] = {
 	{	IH_OS_OPENRTOS,	"openrtos",	"OpenRTOS",		},
 #endif
 	{	IH_OS_OPENSBI,	"opensbi",	"RISC-V OpenSBI",	},
-	{	IH_OS_EFI,	"efi",		"EFI Firmware" },
+	{	IH_OS_EFI,	"efi",		"EFI Firmware"		},
+#ifdef CONFIG_BOOTM_ELF
+	{	IH_OS_ELF,	"elf",		"ELF Image"		},
+#endif
 
 	{	-1,		"",		"",			},
 };
@@ -528,10 +531,10 @@ int image_decomp(int comp, ulong load, ulong image_start, int type,
 		printf("Unimplemented compression type %d\n", comp);
 		return ret;
 	}
-	if (ret)
-		return ret;
 
 	*load_end = load + image_len;
+	if (ret)
+		return ret;
 
 	return 0;
 }

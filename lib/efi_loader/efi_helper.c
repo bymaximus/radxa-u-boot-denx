@@ -74,6 +74,7 @@ out:
  */
 struct efi_device_path *efi_get_dp_from_boot(const efi_guid_t *guid)
 {
+	struct efi_device_path *file_path = NULL;
 	struct efi_load_option lo;
 	void *var_value;
 	efi_uintn_t size;
@@ -92,11 +93,55 @@ struct efi_device_path *efi_get_dp_from_boot(const efi_guid_t *guid)
 	if (ret != EFI_SUCCESS)
 		goto err;
 
-	return efi_dp_from_lo(&lo, guid);
+	file_path = efi_dp_from_lo(&lo, guid);
 
 err:
 	free(var_value);
-	return NULL;
+	return file_path;
+}
+
+/**
+ * efi_load_option_dp_join() - join device-paths for load option
+ *
+ * @dp:		in: binary device-path, out: joined device-path
+ * @dp_size:	size of joined device-path
+ * @initrd_dp:	initrd device-path or NULL
+ * @fdt_dp:	device-tree device-path or NULL
+ * Return:	status_code
+ */
+efi_status_t efi_load_option_dp_join(struct efi_device_path **dp,
+				     size_t *dp_size,
+				     struct efi_device_path *initrd_dp,
+				     struct efi_device_path *fdt_dp)
+{
+	if (!dp)
+		return EFI_INVALID_PARAMETER;
+
+	*dp_size = efi_dp_size(*dp);
+
+	if (initrd_dp) {
+		struct efi_device_path *tmp_dp = *dp;
+
+		*dp = efi_dp_concat(tmp_dp, initrd_dp, *dp_size);
+		efi_free_pool(tmp_dp);
+		if (!*dp)
+			return EFI_OUT_OF_RESOURCES;
+		*dp_size += efi_dp_size(initrd_dp) + sizeof(END);
+	}
+
+	if (fdt_dp) {
+		struct efi_device_path *tmp_dp = *dp;
+
+		*dp = efi_dp_concat(tmp_dp, fdt_dp, *dp_size);
+		efi_free_pool(tmp_dp);
+		if (!*dp)
+			return EFI_OUT_OF_RESOURCES;
+		*dp_size += efi_dp_size(fdt_dp) + sizeof(END);
+	}
+
+	*dp_size += sizeof(END);
+
+	return EFI_SUCCESS;
 }
 
 const struct guid_to_hash_map {
@@ -367,7 +412,7 @@ static efi_status_t copy_fdt(void **fdtp)
 				 EFI_ACPI_RECLAIM_MEMORY, fdt_pages,
 				 &new_fdt_addr);
 	if (ret != EFI_SUCCESS) {
-		log_err("ERROR: Failed to reserve space for FDT\n");
+		log_err("Failed to reserve space for FDT\n");
 		goto done;
 	}
 	new_fdt = (void *)(uintptr_t)new_fdt_addr;
@@ -423,7 +468,7 @@ efi_status_t efi_install_fdt(void *fdt)
 	 * but not both.
 	 */
 	if (CONFIG_IS_ENABLED(GENERATE_ACPI_TABLE) && fdt)
-		log_warning("WARNING: Can't have ACPI table and device tree - ignoring DT.\n");
+		log_warning("Can't have ACPI table and device tree - ignoring DT.\n");
 
 	if (fdt == EFI_FDT_USE_INTERNAL) {
 		const char *fdt_opt;
@@ -438,13 +483,13 @@ efi_status_t efi_install_fdt(void *fdt)
 		if (!fdt_opt) {
 			fdt_opt = env_get("fdtcontroladdr");
 			if (!fdt_opt) {
-				log_err("ERROR: need device tree\n");
+				log_err("need device tree\n");
 				return EFI_NOT_FOUND;
 			}
 		}
 		fdt_addr = hextoul(fdt_opt, NULL);
 		if (!fdt_addr) {
-			log_err("ERROR: invalid $fdt_addr or $fdtcontroladdr\n");
+			log_err("invalid $fdt_addr or $fdtcontroladdr\n");
 			return EFI_LOAD_ERROR;
 		}
 		fdt = map_sysmem(fdt_addr, 0);
@@ -452,7 +497,7 @@ efi_status_t efi_install_fdt(void *fdt)
 
 	/* Install device tree */
 	if (fdt_check_header(fdt)) {
-		log_err("ERROR: invalid device tree\n");
+		log_err("invalid device tree\n");
 		return EFI_LOAD_ERROR;
 	}
 
@@ -465,24 +510,24 @@ efi_status_t efi_install_fdt(void *fdt)
 	/* Prepare device tree for payload */
 	ret = copy_fdt(&fdt);
 	if (ret) {
-		log_err("ERROR: out of memory\n");
+		log_err("out of memory\n");
 		return EFI_OUT_OF_RESOURCES;
 	}
 
-	if (image_setup_libfdt(&img, fdt, NULL)) {
-		log_err("ERROR: failed to process device tree\n");
+	if (image_setup_libfdt(&img, fdt, false)) {
+		log_err("failed to process device tree\n");
 		return EFI_LOAD_ERROR;
 	}
 
 	/* Create memory reservations as indicated by the device tree */
 	efi_carve_out_dt_rsv(fdt);
 
-	efi_try_purge_kaslr_seed(fdt);
+	efi_try_purge_rng_seed(fdt);
 
 	if (CONFIG_IS_ENABLED(EFI_TCG2_PROTOCOL_MEASURE_DTB)) {
 		ret = efi_tcg2_measure_dtb(fdt);
 		if (ret == EFI_SECURITY_VIOLATION) {
-			log_err("ERROR: failed to measure DTB\n");
+			log_err("failed to measure DTB\n");
 			return ret;
 		}
 	}
@@ -490,7 +535,7 @@ efi_status_t efi_install_fdt(void *fdt)
 	/* Install device tree as UEFI table */
 	ret = efi_install_configuration_table(&efi_guid_fdt, fdt);
 	if (ret != EFI_SUCCESS) {
-		log_err("ERROR: failed to install device tree\n");
+		log_err("failed to install device tree\n");
 		return ret;
 	}
 
@@ -529,7 +574,7 @@ efi_status_t do_bootefi_exec(efi_handle_t handle, void *load_options)
 	 */
 	ret = efi_set_watchdog(300);
 	if (ret != EFI_SUCCESS) {
-		log_err("ERROR: Failed to set watchdog timer\n");
+		log_err("failed to set watchdog timer\n");
 		goto out;
 	}
 

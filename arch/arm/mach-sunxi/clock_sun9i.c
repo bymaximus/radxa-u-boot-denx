@@ -14,8 +14,7 @@
 #include <asm/arch/prcm.h>
 #include <asm/arch/sys_proto.h>
 
-
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 
 static void clock_set_pll2(unsigned int clk)
 {
@@ -166,7 +165,6 @@ void clock_set_pll6(unsigned int clk)
 	sdelay(2000);
 }
 
-
 int clock_twi_onoff(int port, int state)
 {
 	struct sunxi_ccm_reg *const ccm =
@@ -190,7 +188,7 @@ int clock_twi_onoff(int port, int state)
 
 	return 0;
 }
-#endif /* CONFIG_SPL_BUILD */
+#endif /* CONFIG_XPL_BUILD */
 
 /* PLL_PERIPH0 clock (used by the MMC driver) */
 unsigned int clock_get_pll4_periph0(void)

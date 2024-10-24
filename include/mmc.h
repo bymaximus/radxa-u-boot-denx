@@ -14,6 +14,7 @@
 #include <linux/sizes.h>
 #include <linux/compiler.h>
 #include <linux/dma-direction.h>
+#include <cyclic.h>
 #include <part.h>
 
 struct bd_info;
@@ -73,7 +74,6 @@ struct bd_info;
 #define MMC_MODE_1BIT		BIT(28)
 #define MMC_MODE_SPI		BIT(27)
 
-
 #define SD_DATA_4BIT	0x00040000
 
 #define IS_SD(x)	((x)->version & SD_VERSION_SD)
@@ -112,7 +112,6 @@ struct bd_info;
 
 #define MMC_CMD62_ARG1			0xefac62ec
 #define MMC_CMD62_ARG2			0xcbaea7
-
 
 #define SD_CMD_SEND_RELATIVE_ADDR	3
 #define SD_CMD_SWITCH_FUNC		6
@@ -373,6 +372,32 @@ enum mmc_voltage {
 #define MMC_TIMING_MMC_DDR52	8
 #define MMC_TIMING_MMC_HS200	9
 #define MMC_TIMING_MMC_HS400	10
+
+/* emmc PARTITION_CONFIG BOOT_PARTITION_ENABLE values */
+enum emmc_boot_part {
+	EMMC_BOOT_PART_DEFAULT = 0,
+	EMMC_BOOT_PART_BOOT1 = 1,
+	EMMC_BOOT_PART_BOOT2 = 2,
+	EMMC_BOOT_PART_USER = 7,
+};
+
+/* emmc PARTITION_CONFIG BOOT_PARTITION_ENABLE names */
+extern const char *emmc_boot_part_names[8];
+
+/* emmc PARTITION_CONFIG ACCESS_ENABLE values */
+enum emmc_hwpart {
+	EMMC_HWPART_DEFAULT = 0, /* user */
+	EMMC_HWPART_BOOT1 = 1,
+	EMMC_HWPART_BOOT2 = 2,
+	EMMC_HWPART_RPMB = 3,
+	EMMC_HWPART_GP1 = 4,
+	EMMC_HWPART_GP2 = 5,
+	EMMC_HWPART_GP3 = 6,
+	EMMC_HWPART_GP4 = 7,
+};
+
+/* emmc PARTITION_CONFIG ACCESS_ENABLE names */
+extern const char *emmc_hwpart_names[8];
 
 /* Driver model support */
 
@@ -701,7 +726,7 @@ struct mmc {
 	u64 capacity_boot;
 	u64 capacity_rpmb;
 	u64 capacity_gp[4];
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 	u64 enh_user_start;
 	u64 enh_user_size;
 #endif
@@ -733,6 +758,8 @@ struct mmc {
 	bool hs400_tuning:1;
 
 	enum bus_mode user_speed_mode; /* input speed mode from user */
+
+	CONFIG_IS_ENABLED(CYCLIC, (struct cyclic_info cyclic));
 };
 
 #if CONFIG_IS_ENABLED(DM_MMC)

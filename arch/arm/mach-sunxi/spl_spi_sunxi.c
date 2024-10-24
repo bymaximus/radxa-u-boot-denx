@@ -140,7 +140,8 @@ static bool is_sun6i_gen_spi(void)
 {
 	return IS_ENABLED(CONFIG_SUNXI_GEN_SUN6I) ||
 	       IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
-	       IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2);
+	       IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2) ||
+	       IS_ENABLED(CONFIG_MACH_SUN8I_V3S);
 }
 
 static uintptr_t spi0_base_address(void)
@@ -389,8 +390,7 @@ static int spl_spi_load_image(struct spl_image_info *spl_image,
 		struct spl_load_info load;
 
 		debug("Found FIT image\n");
-		spl_set_bl_len(&load, 1);
-		load.read = spi_load_read;
+		spl_load_init(&load, spi_load_read, NULL, 1);
 		ret = spl_load_simple_fit(spl_image, &load,
 					  load_offset, header);
 	} else {

@@ -66,9 +66,9 @@
 #ifdef CONFIG_TARGET_AM625_A53_BEAGLEPLAY
 
 #define SPL_NODTB "spl/u-boot-spl-nodtb.bin"
-#define SPL_AM625_BEAGLEPLAY_DTB "spl/dts/k3-am625-beagleplay.dtb"
+#define SPL_AM625_BEAGLEPLAY_DTB "spl/dts/ti/k3-am625-beagleplay.dtb"
 #define UBOOT_NODTB "u-boot-nodtb.bin"
-#define AM625_BEAGLEPLAY_DTB "arch/arm/dts/k3-am625-beagleplay.dtb"
+#define AM625_BEAGLEPLAY_DTB "dts/upstream/src/arm64/ti/k3-am625-beagleplay.dtb"
 
 &binman {
 	ti-dm {
@@ -78,8 +78,26 @@
 		};
 	};
 
+	tifsstub-gp {
+		filename = "tifsstub.bin_gp";
+		ti-secure-rom {
+			content = <&tifsstub_gp>;
+			core = "secure";
+			load = <0x60000>;
+			sw-rev = <CONFIG_K3_X509_SWRV>;
+			keyfile = "ti-degenerate-key.pem";
+			tifsstub;
+		};
+		tifsstub_gp: tifsstub-gp.bin {
+			filename = "ti-sysfw/ti-fs-stub-firmware-am62x-gp.bin";
+			type = "blob-ext";
+			optional;
+		};
+	};
+
 	ti-spl_unsigned {
 		filename = "tispl.bin_unsigned";
+		symlink = "tispl.bin";
 		pad-byte = <0xff>;
 
 		fit {
@@ -111,6 +129,19 @@
 					entry = <CONFIG_K3_OPTEE_LOAD_ADDR>;
 					tee-os {
 						filename = "tee-raw.bin";
+					};
+				};
+
+				tifsstub-gp {
+					description = "tifsstub";
+					type = "firmware";
+					arch = "arm32";
+					compression = "none";
+					os = "tifsstub-gp";
+					load = <0x9dc00000>;
+					entry = <0x9dc00000>;
+					blob-ext {
+						filename = "tifsstub.bin_gp";
 					};
 				};
 
@@ -157,7 +188,8 @@
 				conf-0 {
 					description = "k3-am625-beagleplay";
 					firmware = "atf";
-					loadables = "tee", "dm", "spl";
+					loadables = "tee", "dm", "spl",
+					"tifsstub-gp";
 					fdt = "fdt-0";
 				};
 			};
@@ -214,6 +246,33 @@
 		};
 	};
 };
+
+#include "k3-binman-capsule.dtsi"
+
+// Capsule update GUIDs in string form.  See beagleplay.h
+#define BEAGLEPLAY_SPL_IMAGE_GUID_STR "b2e7cc49-1a5a-4036-ae01-3387c3bef657"
+#define BEAGLEPLAY_UBOOT_IMAGE_GUID_STR "92c92b11-a7ee-486f-aaa2-713d84425b0e"
+
+&capsule_tispl {
+	efi-capsule {
+		image-guid = BEAGLEPLAY_SPL_IMAGE_GUID_STR;
+
+		blob {
+			filename = "tispl.bin_unsigned";
+		};
+	};
+};
+
+&capsule_uboot {
+	efi-capsule {
+		image-guid = BEAGLEPLAY_UBOOT_IMAGE_GUID_STR;
+
+		blob {
+			filename = "u-boot.img_unsigned";
+		};
+	};
+};
+
 #endif
 
 &main_bcdma {

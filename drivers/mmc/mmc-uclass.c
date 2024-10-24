@@ -301,7 +301,7 @@ struct mmc *find_mmc_device(int dev_num)
 	ret = blk_find_device(UCLASS_MMC, dev_num, &dev);
 
 	if (ret) {
-#if !defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_LIBCOMMON_SUPPORT)
+#if !defined(CONFIG_XPL_BUILD) || defined(CONFIG_SPL_LIBCOMMON_SUPPORT)
 		printf("MMC Device %d not found\n", dev_num);
 #endif
 		return NULL;
@@ -373,7 +373,7 @@ void mmc_do_preinit(void)
 	}
 }
 
-#if !defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_LIBCOMMON_SUPPORT)
+#if !defined(CONFIG_XPL_BUILD) || defined(CONFIG_SPL_LIBCOMMON_SUPPORT)
 void print_mmc_devices(char separator)
 {
 	struct udevice *dev;
@@ -537,7 +537,6 @@ U_BOOT_DRIVER(mmc_blk) = {
 	.flags		= DM_FLAG_OS_PREPARE,
 };
 #endif /* CONFIG_BLK */
-
 
 UCLASS_DRIVER(mmc) = {
 	.id		= UCLASS_MMC,

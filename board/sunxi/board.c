@@ -281,7 +281,7 @@ int dram_init(void)
 	return 0;
 }
 
-#if defined(CONFIG_NAND_SUNXI) && defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_NAND_SUNXI) && defined(CONFIG_XPL_BUILD)
 static void nand_pinmux_setup(void)
 {
 	unsigned int pin;
@@ -515,7 +515,7 @@ int board_mmc_init(struct bd_info *bis)
 	return 0;
 }
 
-#if CONFIG_MMC_SUNXI_SLOT_EXTRA != -1
+#ifdef CONFIG_SYS_MMC_ENV_DEV
 int mmc_get_env_dev(void)
 {
 	switch (sunxi_get_boot_device()) {
@@ -530,7 +530,7 @@ int mmc_get_env_dev(void)
 #endif
 #endif /* CONFIG_MMC */
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 
 static void sunxi_spl_store_dram_size(phys_addr_t dram_size)
 {
@@ -562,7 +562,7 @@ void sunxi_board_init(void)
 #if defined CONFIG_AXP152_POWER || defined CONFIG_AXP209_POWER || \
 	defined CONFIG_AXP221_POWER || defined CONFIG_AXP305_POWER || \
 	defined CONFIG_AXP809_POWER || defined CONFIG_AXP818_POWER || \
-	defined CONFIG_AXP313_POWER
+	defined CONFIG_AXP313_POWER || defined CONFIG_AXP717_POWER
 	power_failed = axp_init();
 
 	if (IS_ENABLED(CONFIG_AXP_DISABLE_BOOT_ON_POWERON) && !power_failed) {
@@ -641,7 +641,7 @@ void sunxi_board_init(void)
 	else
 		printf("Failed to set core voltage! Can't set CPU frequency\n");
 }
-#endif /* CONFIG_SPL_BUILD */
+#endif /* CONFIG_XPL_BUILD */
 
 #ifdef CONFIG_USB_GADGET
 int g_dnl_board_usb_cable_connected(void)

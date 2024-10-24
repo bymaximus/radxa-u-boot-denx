@@ -21,7 +21,6 @@
 
 #define MX5_USBOTHER_REGS_OFFSET 0x800
 
-
 #define MXC_OTG_OFFSET			0
 #define MXC_H1_OFFSET			0x200
 #define MXC_H2_OFFSET			0x400
@@ -79,6 +78,10 @@
 
 /* USB_CTRL_1 */
 #define MXC_USB_CTRL_UH1_EXT_CLK_EN	(1 << 25)
+
+#ifndef CFG_MXC_USB_PORTSC
+#define CFG_MXC_USB_PORTSC	(PORT_PTS_UTMI | PORT_PTS_PTW)
+#endif
 
 int mxc_set_usbcontrol(int port, unsigned int flags)
 {

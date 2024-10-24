@@ -197,7 +197,6 @@ static inline void blkcache_free(void) {}
 
 #endif
 
-#if CONFIG_IS_ENABLED(BLK)
 struct udevice;
 
 /* Operations on block devices */
@@ -278,6 +277,8 @@ struct blk_ops {
 #endif	/* CONFIG_BOUNCE_BUFFER */
 };
 
+#if CONFIG_IS_ENABLED(BLK)
+
 /*
  * These functions should take struct udevice instead of struct blk_desc,
  * but this is convenient for migration to driver model. Add a 'd' prefix
@@ -290,6 +291,8 @@ unsigned long blk_dwrite(struct blk_desc *block_dev, lbaint_t start,
 			 lbaint_t blkcnt, const void *buffer);
 unsigned long blk_derase(struct blk_desc *block_dev, lbaint_t start,
 			 lbaint_t blkcnt);
+
+#endif /* BLK */
 
 /**
  * blk_read() - Read from a block device
@@ -528,8 +531,10 @@ struct blk_desc *blk_get_by_device(struct udevice *dev);
  */
 int blk_get_desc(enum uclass_id uclass_id, int devnum, struct blk_desc **descp);
 
-#else
+#if !CONFIG_IS_ENABLED(BLK)
+
 #include <errno.h>
+
 /*
  * These functions should take struct udevice instead of struct blk_desc,
  * but this is convenient for migration to driver model. Add a 'd' prefix
@@ -650,7 +655,7 @@ struct blk_driver *blk_driver_lookup_type(int uclass_id);
 struct blk_desc *blk_get_devnum_by_uclass_id(enum uclass_id uclass_id, int devnum);
 
 /**
- * blk_get_devnum_by_uclass_id() - Get a block device by type name, and number
+ * blk_get_devnum_by_uclass_idname() - Get block device by type name and number
  *
  * This looks up the block device type based on @uclass_idname, then calls
  * blk_get_devnum_by_uclass_id().
@@ -660,7 +665,7 @@ struct blk_desc *blk_get_devnum_by_uclass_id(enum uclass_id uclass_id, int devnu
  * Return: point to block device descriptor, or NULL if not found
  */
 struct blk_desc *blk_get_devnum_by_uclass_idname(const char *uclass_idname,
-					    int devnum);
+						 int devnum);
 
 /**
  * blk_dselect_hwpart() - select a hardware partition

@@ -53,7 +53,6 @@ struct zynq_spi_regs {
 	u32 rxdr;	/* 0x20 */
 };
 
-
 /* zynq spi platform data */
 struct zynq_spi_plat {
 	struct zynq_spi_regs *regs;
@@ -241,15 +240,15 @@ static int zynq_spi_xfer(struct udevice *dev, unsigned int bitlen,
 	u8 *rx_buf = din, buf;
 	u32 ts, status;
 
-	debug("spi_xfer: bus:%i cs:%i bitlen:%i len:%i flags:%lx\n",
-	      dev_seq(bus), slave_plat->cs, bitlen, len, flags);
+	debug("spi_xfer: bus:%i cs[0]:%i bitlen:%i len:%i flags:%lx\n",
+	      dev_seq(bus), slave_plat->cs[0], bitlen, len, flags);
 
 	if (bitlen % 8) {
 		debug("spi_xfer: Non byte aligned SPI transfer\n");
 		return -1;
 	}
 
-	priv->cs = slave_plat->cs;
+	priv->cs = slave_plat->cs[0];
 	if (flags & SPI_XFER_BEGIN)
 		spi_cs_activate(dev);
 

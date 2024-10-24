@@ -30,6 +30,7 @@
 #include <fuse.h>
 #include <i2c_eeprom.h>
 #include <mmc.h>
+#include <power/regulator.h>
 #include <usb.h>
 #include <linux/delay.h>
 #include <usb/ehci-ci.h>

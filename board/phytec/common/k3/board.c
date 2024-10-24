@@ -5,8 +5,11 @@
  */
 
 #include <env_internal.h>
+#include <fdt_support.h>
 #include <spl.h>
 #include <asm/arch/hardware.h>
+
+#include "../am6_som_detection.h"
 
 #if IS_ENABLED(CONFIG_ENV_IS_IN_FAT) || IS_ENABLED(CONFIG_ENV_IS_IN_MMC)
 int mmc_get_env_dev(void)
@@ -67,6 +70,36 @@ int board_late_init(void)
 		env_set("boot", "net");
 		break;
 	};
+
+	if (IS_ENABLED(CONFIG_PHYTEC_SOM_DETECTION_BLOCKS)) {
+		struct phytec_api3_element *block_element;
+		struct phytec_eeprom_data data;
+		int ret;
+
+		ret = phytec_eeprom_data_setup(&data, 0, EEPROM_ADDR);
+		if (ret || !data.valid)
+			return 0;
+
+		PHYTEC_API3_FOREACH_BLOCK(block_element, &data) {
+			switch (block_element->block_type) {
+			case PHYTEC_API3_BLOCK_MAC:
+				phytec_blocks_add_mac_to_env(block_element);
+				break;
+			default:
+				debug("%s: Unknown block type %i\n", __func__,
+				      block_element->block_type);
+			}
+		}
+	}
+
+	return 0;
+}
+#endif
+
+#if IS_ENABLED(CONFIG_OF_LIBFDT) && IS_ENABLED(CONFIG_OF_BOARD_SETUP)
+int ft_board_setup(void *blob, struct bd_info *bd)
+{
+	fdt_copy_fixed_partitions(blob);
 
 	return 0;
 }

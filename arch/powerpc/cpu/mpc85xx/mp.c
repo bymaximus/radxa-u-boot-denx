@@ -191,7 +191,6 @@ u32 determine_mp_bootpg(unsigned int *pagesize)
 	struct law_entry e;
 #endif
 
-
 	/* use last 4K of mapped memory */
 	bootpg = ((gd->ram_size > CFG_MAX_MEM_MAPPED) ?
 		CFG_MAX_MEM_MAPPED : gd->ram_size) +
@@ -409,11 +408,11 @@ static void plat_mp_up(unsigned long bootpg, unsigned int pagesize)
 }
 #endif
 
-void cpu_mp_lmb_reserve(struct lmb *lmb)
+void cpu_mp_lmb_reserve(void)
 {
 	u32 bootpg = determine_mp_bootpg(NULL);
 
-	lmb_reserve(lmb, bootpg, 4096);
+	lmb_reserve(bootpg, 4096);
 }
 
 void setup_mp(void)

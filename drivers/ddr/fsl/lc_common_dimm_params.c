@@ -191,7 +191,6 @@ compute_cas_latency(const unsigned int ctrl_num,
 	      lowest_good_caslat);
 	outpdimm->lowest_common_spd_caslat = lowest_good_caslat;
 
-
 	/*
 	 * Compute a common 'de-rated' CAS latency.
 	 *
@@ -410,18 +409,18 @@ compute_lowest_common_dimm_parameters(const unsigned int ctrl_num,
 		if (dimm_params[i].n_ranks) {
 			if (dimm_params[i].registered_dimm) {
 				temp1 = 1;
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 				printf("Detected RDIMM %s\n",
 					dimm_params[i].mpart);
 #endif
 			} else {
 				temp2 = 1;
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 				printf("Detected UDIMM %s\n",
 					dimm_params[i].mpart);
 #endif
 			}
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 			puts("       ");
 #endif
 		}
